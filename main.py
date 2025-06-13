@@ -1,6 +1,5 @@
-import os
-import json
 from flask import Flask, request, jsonify
+import os
 from openai import OpenAI
 
 app = Flask(__name__)
@@ -16,42 +15,35 @@ def enrich():
     company = data.get("company_name")
     website = data.get("website")
 
-    prompt = f"""
-You are a business research assistant. Given a company name and website, return enriched lead data in JSON format.
-Focus on accurate and verifiable information. Do not guess. Use real, publicly available details.
+    if not company or not website:
+        return jsonify({"error": "Missing company_name or website"}), 400
 
-Company: {company}
-Website: {website}
-
-Return JSON with these fields only:
-{{
-  "CompanyName": "",
-  "CompanyEmail": "",
-  "Location": "",
-  "BestPOC": "",
-  "POCEmail": "",
-  "POCLinkedIn": "",
-  "InstagramURL": "",
-  "LinkedInURL": "",
-  "Website": "{website}",
-  "CompanyServices": "",
-  "ValueProp": "",
-  "CompanySize": "",
-  "AnnualRevenue": "",
-  "LeadScore": 0
-}}
-"""
+    prompt = f"""You are a business research assistant...
+    Company: {company}
+    Website: {website}
+    Return JSON with fields:
+    {{
+      "CompanyName": "",
+      ...
+    }}
+    """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                { "role": "system", "content": "You are a professional business research assistant." },
+                { "role": "system", "content": "You are a professional assistant." },
                 { "role": "user", "content": prompt }
             ],
             temperature=0.3,
         )
         content = response.choices[0].message.content.strip()
+
+        if content.startswith("```json"):
+            content = content.replace("```json", "").replace("```", "").strip()
+        elif content.startswith("```"):
+            content = content.replace("```", "").strip()
+
         return jsonify(json.loads(content))
 
     except Exception as e:
