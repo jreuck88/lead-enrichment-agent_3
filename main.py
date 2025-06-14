@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 from flask import Flask, request, jsonify
 from openai import OpenAI
 
@@ -10,7 +11,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/")
 def home():
-    return "✅ Lead Enrichment Agent is live."
+    return "✅ Lead Enrichment & Image OCR Agent is live."
 
 @app.route("/enrich", methods=["POST"])
 def enrich():
@@ -51,8 +52,8 @@ Return only this JSON object:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                { "role": "system", "content": "You are a professional research assistant." },
-                { "role": "user",   "content": prompt }
+                {"role": "system", "content": "You are a professional research assistant."},
+                {"role": "user",   "content": prompt}
             ],
             temperature=0.3
         )
@@ -61,9 +62,9 @@ Return only this JSON object:
 
         # strip any ``` fences
         if content.startswith("```json"):
-            content = content.replace("```json","").replace("```","").strip()
+            content = content.replace("```json", "").replace("```", "").strip()
         elif content.startswith("```"):
-            content = content.replace("```","").strip()
+            content = content.replace("```", "").strip()
 
         parsed = json.loads(content)
         return jsonify(parsed)
@@ -71,6 +72,34 @@ Return only this JSON object:
     except Exception as e:
         print("❌ Backend error:", e)
         return jsonify({"error": f"Server error: {e}"}), 500
+
+
+@app.route("/analyze-image", methods=["POST"])
+def analyze_image():
+    try:
+        data = request.get_json(force=True)
+        b64 = data.get("image_base64")
+        if not b64:
+            return jsonify({"error": "Missing 'image_base64'"}), 400
+
+        # call OpenAI GPT-4 Vision (or equivalent) for OCR/brand extraction
+        img_bytes = base64.b64decode(b64)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # or your available GPT-4V model
+            messages=[
+                {"role": "system", "content": "You are an OCR assistant. Extract the brand or company name from the given image."},
+                {"role": "user",   "content": "Please return only the brand or company name you recognize."}
+            ],
+            images=[{"buffer": img_bytes}]
+        )
+
+        brand_name = response.choices[0].message.content.strip()
+        return jsonify({"brandName": brand_name})
+
+    except Exception as e:
+        print("❌ OCR error:", e)
+        return jsonify({"error": f"Server error: {e}"}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
