@@ -5,7 +5,7 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# Initialize OpenAI client using Render environment variable
+# Initialize OpenAI client using the OPENAI_API_KEY env var in Render
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/")
@@ -52,26 +52,25 @@ Return only this JSON object:
             model="gpt-4o",
             messages=[
                 { "role": "system", "content": "You are a professional research assistant." },
-                { "role": "user", "content": prompt }
+                { "role": "user",   "content": prompt }
             ],
             temperature=0.3
         )
 
         content = response.choices[0].message.content.strip()
 
-        # Extract JSON if wrapped in markdown
+        # strip any ``` fences
         if content.startswith("```json"):
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = content.replace("```json","").replace("```","").strip()
         elif content.startswith("```"):
-            content = content.replace("```", "").strip()
+            content = content.replace("```","").strip()
 
-        # Attempt to parse and return JSON
         parsed = json.loads(content)
         return jsonify(parsed)
 
     except Exception as e:
-        print("❌ Backend error:", str(e))
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        print("❌ Backend error:", e)
+        return jsonify({"error": f"Server error: {e}"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
