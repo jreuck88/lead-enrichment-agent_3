@@ -1,22 +1,23 @@
 import os
 import json
-import base64
 from flask import Flask, request, jsonify
 from openai import OpenAI
 
 app = Flask(__name__)
 
-# Initialize OpenAI client using the OPENAI_API_KEY env var in Render
+# ─────────────────────────────────────────────────────────────────────────────
+# Initialize OpenAI client using your Render env var OPENAI_API_KEY
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def home():
-    return "✅ Lead Enrichment & Image OCR Agent is live."
+    return "✅ Lead Enrichment Agent is live."
 
 @app.route("/enrich", methods=["POST"])
 def enrich():
     try:
-        data = request.get_json(force=True)
+        data    = request.get_json(force=True)
         company = data.get("company_name")
         website = data.get("website")
 
@@ -25,12 +26,12 @@ def enrich():
 
         prompt = f"""
 You are a business research assistant. Given a company name and website, return enriched lead data in JSON format.
-Use only real, verifiable, public data. Do not make up anything.
+Use only real, verifiable, public data. Do not make anything up.
 
 Company: {company}
 Website: {website}
 
-Return only this JSON object:
+Return ONLY this JSON object with these keys:
 {{
   "CompanyName": "",
   "CompanyEmail": "",
@@ -48,29 +49,27 @@ Return only this JSON object:
   "LeadScore": 0
 }}
 """
-
-        response = client.chat.completions.create(
+        # call GPT
+        resp = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a professional research assistant."},
-                {"role": "user",   "content": prompt}
+                {"role":"system", "content":"You are a professional research assistant."},
+                {"role":"user",   "content":prompt}
             ],
             temperature=0.3
         )
-
-        content = response.choices[0].message.content.strip()
-
+        content = resp.choices[0].message.content.strip()
         # strip any ``` fences
         if content.startswith("```json"):
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = content.replace("```json","").replace("```","").strip()
         elif content.startswith("```"):
-            content = content.replace("```", "").strip()
+            content = content.replace("```","").strip()
 
         parsed = json.loads(content)
         return jsonify(parsed)
 
     except Exception as e:
-        print("❌ Backend error:", e)
+        print("❌ /enrich error:", e)
         return jsonify({"error": f"Server error: {e}"}), 500
 
 
@@ -78,26 +77,32 @@ Return only this JSON object:
 def analyze_image():
     try:
         data = request.get_json(force=True)
-        b64 = data.get("image_base64")
+        b64  = data.get("image_base64")
         if not b64:
             return jsonify({"error": "Missing 'image_base64'"}), 400
 
-        # call OpenAI GPT-4 Vision (or equivalent) for OCR/brand extraction
-        img_bytes = base64.b64decode(b64)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # or your available GPT-4V model
-            messages=[
-                {"role": "system", "content": "You are an OCR assistant. Extract the brand or company name from the given image."},
-                {"role": "user",   "content": "Please return only the brand or company name you recognize."}
-            ],
-            images=[{"buffer": img_bytes}]
-        )
+        prompt = f"""
+You are an OCR assistant. Given a base64-encoded image, extract the brand or company name and its official website.
+Return ONLY a JSON object with keys `brandName` and `brandWebsite`.
 
-        brand_name = response.choices[0].message.content.strip()
-        return jsonify({"brandName": brand_name})
+Image (base64): {b64}
+"""
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role":"system", "content": "You are an OCR assistant."},
+                {"role":"user",   "content": prompt}
+            ],
+            temperature=0
+        )
+        content = resp.choices[0].message.content.strip()
+        # strip backticks if any
+        content = content.replace("```json","").replace("```","").strip()
+        parsed  = json.loads(content)
+        return jsonify(parsed)
 
     except Exception as e:
-        print("❌ OCR error:", e)
+        print("❌ /analyze-image error:", e)
         return jsonify({"error": f"Server error: {e}"}), 500
 
 
