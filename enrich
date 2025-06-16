@@ -1,0 +1,11 @@
+from sheet_api import get_new_rows, update_row
+from utils import enrich_row_data
+
+def enrich_all_rows():
+    rows = get_new_rows()
+    updated_count = 0
+    for row in rows:
+        enriched = enrich_row_data(row)
+        update_row(row['row_index'], enriched)
+        updated_count += 1
+    return updated_count
