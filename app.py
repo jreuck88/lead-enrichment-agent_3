@@ -14,7 +14,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # 📊 Google Sheets config
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-CREDS_FILE = "google-creds.json"
+CREDS_FILE =  "/etc/secrets/service_account.json"
 SPREADSHEET_ID = "1thZnhvqC_rZZH4Ixa7a2PoXnuq8gnWXBJGxsqjUk3KU"
 SHEET_NAME = "Agent"
 HEADER_ROW_INDEX = 1  # Row 1 = top row
