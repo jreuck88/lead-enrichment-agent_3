@@ -6,29 +6,20 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 from openai import OpenAI
 
-# 🔧 Flask app setup
 app = Flask(__name__)
-
-# 🔐 OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 📊 Google Sheets config
+# Google Sheets config
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 CREDS_FILE = "/etc/secrets/service_account.json"
 SPREADSHEET_ID = "1thZnhvqC_rZZH4Ixa7a2PoXnuq8gnWXBJGxsqjUk3KU"
 SHEET_NAME = "Agent"
-HEADER_ROW_INDEX = 1  # Row 1 = top row
+HEADER_ROW_INDEX = 1  # headers are on row 1, data starts at row 2
 
 def get_sheet():
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_FILE, SCOPE)
     gc = gspread.authorize(creds)
     return gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
-
-def log_progress(sheet, message):
-    try:
-        sheet.update("B2", [[datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
-    except Exception as e:
-        print("⚠️ Logging failed:", e)
 
 def enrich_row(prompt):
     try:
@@ -50,48 +41,52 @@ def enrich_row(prompt):
 
 @app.route("/")
 def home():
-    return jsonify({"message": "✅ CRM Lead Enrichment API is live."})
+    return jsonify({"message": "✅ Lead Enrichment API is running."})
 
 @app.route("/enrich", methods=["POST"])
 def enrich():
     try:
-        data = request.get_json()
-        company = data.get("company_name", "")
-        website = data.get("website", "")
+        sheet = get_sheet()
+        headers = sheet.row_values(HEADER_ROW_INDEX)
+        records = sheet.get_all_records(head=HEADER_ROW_INDEX)
+        updated_count = 0
 
-        prompt = f"""Enrich this company:
+        for i, row in enumerate(records):
+            row_num = i + 2  # data starts on row 2
+            if str(row.get("Enriched", "")).strip() == "1":
+                continue
+
+            company = row.get("Company Name", "")
+            location = row.get("Location", "")
+            website = row.get("Website", "")
+
+            print(f"🔍 Enriching: {company}")
+
+            prompt = f"""Enrich this company:
 Company: {company}
+Location: {location}
 Website: {website}
 
-Return JSON with only these fields:
-- CompanyName
-- CompanyEmail
-- Location
-- BestPOC
-- POCEmail
-- POCLinkedIn
-- InstagramURL
-- LinkedInURL
-- Website
-- CompanyServices
-- ValueProp
-- CompanySize
-- AnnualRevenue
-- LeadScore
+Return JSON with these exact keys:
+Company Name, Company Email, Location, Best Point of Contact (POC) and their Role, Individual POC info / email, Individual POC LinkedIn URL, Company Instagram URL, Company LinkedIn URL, Website, Company Services, Value Prop / Why a good fit, Company size (# of employees), Annual Revenue, Lead Score (1-100)
 """
 
-        enriched = enrich_row(prompt)
-        if "error" in enriched:
-            return jsonify({"error": enriched["error"]})
+            enriched = enrich_row(prompt)
+            if "error" in enriched:
+                print(f"❌ Skipped row {row_num} due to error.")
+                continue
 
-        # Optional logging
-        try:
-            sheet = get_sheet()
-            log_progress(sheet, f"Enriched: {company}")
-        except Exception as log_err:
-            print("⚠️ Could not log enrichment:", log_err)
+            for key, val in enriched.items():
+                if key in headers:
+                    col_index = headers.index(key) + 1
+                    sheet.update_cell(row_num, col_index, val)
 
-        return jsonify(enriched)
+            sheet.update_cell(row_num, headers.index("Enriched") + 1, "1")
+            sheet.update_cell(row_num, headers.index("Date Added") + 1, datetime.now().strftime("%Y-%m-%d"))
+
+            updated_count += 1
+
+        return jsonify({"status": "done", "updated_rows": updated_count})
 
     except Exception as e:
         print("❌ Server error:", e)
