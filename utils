@@ -1,0 +1,19 @@
+import openai
+import os
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def enrich_row_data(row):
+    prompt = f"Enrich this company: {row['Company Name']} located in {row['Location']}"
+    completion = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    response = completion.choices[0].message['content']
+    # You'd parse and map this output properly
+    return {
+        "Company Services": "parsed value",
+        "Value Prop / Why a good fit": response,
+        "Lead Score (1-100)": 80,
+        # Add others as needed
+    }
