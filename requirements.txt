@@ -1,3 +1,5 @@
-flask
-openai>=1.0.0
-gunicorn
+fastapi
+uvicorn
+openai
+gspread
+oauth2client
