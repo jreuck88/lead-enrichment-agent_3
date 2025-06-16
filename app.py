@@ -14,7 +14,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # 📊 Google Sheets config
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-CREDS_FILE =  "/etc/secrets/service_account.json"
+CREDS_FILE = "/etc/secrets/service_account.json"
 SPREADSHEET_ID = "1thZnhvqC_rZZH4Ixa7a2PoXnuq8gnWXBJGxsqjUk3KU"
 SHEET_NAME = "Agent"
 HEADER_ROW_INDEX = 1  # Row 1 = top row
@@ -23,6 +23,12 @@ def get_sheet():
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_FILE, SCOPE)
     gc = gspread.authorize(creds)
     return gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+
+def log_progress(sheet, message):
+    try:
+        sheet.update("B2", [[datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
+    except Exception as e:
+        print("⚠️ Logging failed:", e)
 
 def enrich_row(prompt):
     try:
@@ -77,6 +83,14 @@ Return JSON with only these fields:
         enriched = enrich_row(prompt)
         if "error" in enriched:
             return jsonify({"error": enriched["error"]})
+
+        # Optional logging
+        try:
+            sheet = get_sheet()
+            log_progress(sheet, f"Enriched: {company}")
+        except Exception as log_err:
+            print("⚠️ Could not log enrichment:", log_err)
+
         return jsonify(enriched)
 
     except Exception as e:
