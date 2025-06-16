@@ -1,0 +1,26 @@
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+CREDS_FILE = "google-creds.json"
+SPREADSHEET_ID = "1thZnhvqC_rZZH4Ixa7a2PoXnuq8gnWXBJGxsqjUk3KU"
+TAB_NAME = "Agent"
+
+def connect():
+    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_FILE, SCOPE)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(SPREADSHEET_ID).worksheet(TAB_NAME)
+    return sheet
+
+def get_new_rows():
+    sheet = connect()
+    rows = sheet.get_all_records(head=9)
+    return [{"row_index": i+10, **row} for i, row in enumerate(rows) if row.get("Enriched") != "1"]
+
+def update_row(index, enriched_data):
+    sheet = connect()
+    for key, value in enriched_data.items():
+        cell = sheet.find(key)
+        if cell:
+            sheet.update_cell(index, cell.col, value)
+    sheet.update_cell(index, sheet.find("Enriched").col, "1")
