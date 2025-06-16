@@ -46,8 +46,8 @@ def home():
 def enrich():
     try:
         sheet = get_sheet()
-        records = sheet.get_all_records(head=9)
-        headers = sheet.row_values(9)
+        records = sheet.get_all_records(head=1)
+        headers = sheet.row_values(1)
 
         updated_count = 0
         skipped = []
